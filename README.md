@@ -1,13 +1,11 @@
-# Sample Hardhat Project
+# Sleep ZKP Blockchain Hands-On Lab
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+This hands-on lab demonstrates a secure and privacy-preserving Sleep ZKP Blockchain system using **IPFS, Ethereum blockchain, and Zero-Knowledge Proofs (ZKP)**.  
 
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.js
-```
+The lab covers:  
+- Real-time anomaly detection reports  
+- AES-256 encrypted payloads  
+- IPFS-based storage  
+- Ethereum smart contract for immutable logging  
+- ZKP hash integration for privacy validation  
+- Email notifications
