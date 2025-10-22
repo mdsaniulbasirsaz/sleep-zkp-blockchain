@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZK-Verified Health Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Slate 50 */
+        }
+        .form-card {
+            background-color: white;
+            border: 1px solid #e2e8f0; /* Slate 200 */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .status-toast.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .record-card {
+             background-color: white;
+            border: 1px solid #e2e8f0; /* Slate 200 */
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .record-card:hover {
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">Sleep Anomaly Tracker</h1>
+            <p class="text-slate-500 mt-2">Securely log and verify sleep data with ZK-Proofs on the blockchain.</p>
+        </header>
+
+        <div id="connect-section" class="text-center">
+            <div id="metamask-info" class="p-4 rounded-lg mb-4 max-w-md mx-auto"></div>
+            <button id="connectBtn" class="bg-indigo-600 text-white font-semibold py-3 px-8 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300 transform hover:scale-105 btn">
+                Connect MetaMask
+            </button>
+        </div>
+
+        <div id="app-section" class="hidden space-y-8">
+            
+            <div id="wallet-info" class="bg-white border border-slate-200 p-4 rounded-lg flex items-center justify-center space-x-3 text-sm shadow-sm"></div>
+
+            <div class="form-card p-6 md:p-8 rounded-2xl">
+                <h2 class="text-2xl font-semibold text-slate-900 mb-6">Log a New Sleep Record</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label for="sleepDuration" class="block mb-2 text-sm font-medium text-slate-600">Sleep Duration (hours)</label>
+                        <input type="number" id="sleepDuration" step="0.1" placeholder="e.g., 7.5" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div class="form-group">
+                        <label for="sleepQuality" class="block mb-2 text-sm font-medium text-slate-600">Sleep Quality (1-10)</label>
+                        <input type="number" id="sleepQuality" min="1" max="10" placeholder="e.g., 8" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div class="form-group">
+                        <label for="anomalyScore" class="block mb-2 text-sm font-medium text-slate-600">Anomaly Score</label>
+                        <input type="number" id="anomalyScore" step="0.1" placeholder="e.g., 85.2" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                    </div>
+                    <div class="form-group">
+                        <label for="userEmail" class="block mb-2 text-sm font-medium text-slate-600">Email for Alerts (Optional)</label>
+                        <input type="email" id="userEmail" placeholder="your.email@example.com" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                        <p class="text-xs text-slate-400 mt-2">You will receive an email if this record is flagged as an anomaly.</p>
+                    </div>
+                    <div class="form-group md:col-span-2 flex items-center space-x-3">
+                         <input type="checkbox" id="isAnomaly" class="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                         <label for="isAnomaly" class="text-sm font-medium text-slate-600">Flag this record as an anomaly?</label>
+                    </div>
+                </div>
+                <div class="mt-8 flex flex-col md:flex-row gap-4">
+                    <button id="submitBtn" class="w-full md:w-auto bg-indigo-600 text-white font-semibold py-3 px-8 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-300 btn flex items-center justify-center gap-2">
+                        <svg id="submitBtn-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span id="submit-text">Submit Record</span>
+                    </button>
+                    <button id="fetchBtn" class="w-full md:w-auto bg-white border-2 border-slate-300 text-slate-700 font-semibold py-3 px-8 rounded-lg hover:bg-slate-100 transition-colors duration-300 btn flex items-center justify-center gap-2">
+                        <svg id="fetchBtn-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-slate-600 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span id="fetch-text">Fetch My Records</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="records" class="space-y-6"></div>
+        </div>
+    </div>
+
+    <div id="status-toast" class="status-toast"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:4000';
+        
+        const connectBtn = document.getElementById('connectBtn');
+        const appSection = document.getElementById('app-section');
+        const submitBtn = document.getElementById('submitBtn');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const recordsDiv = document.getElementById('records');
+        const walletInfoDiv = document.getElementById('wallet-info');
+        const metamaskInfoDiv = document.getElementById('metamask-info');
+        const statusToast = document.getElementById('status-toast');
+        
+        let provider;
+        let signer;
+        let userAddress;
+
+        function showToast(message, type = 'info', duration = 4000) {
+            statusToast.textContent = message;
+            statusToast.className = 'status-toast show';
+            if (type === 'success') statusToast.classList.add('bg-green-600');
+            else if (type === 'error') statusToast.classList.add('bg-red-600');
+            else statusToast.classList.add('bg-gray-800');
+            
+            setTimeout(() => {
+                statusToast.classList.remove('show');
+            }, duration);
+        }
+
+        function toggleButtonSpinner(buttonId, textId, show) {
+            const button = document.getElementById(buttonId);
+            const spinner = document.getElementById(`${buttonId}-spinner`);
+            const text = document.getElementById(textId);
+            
+            if (show) {
+                button.disabled = true;
+                spinner.classList.remove('hidden');
+                text.textContent = 'Processing...';
+            } else {
+                button.disabled = false;
+                spinner.classList.add('hidden');
+                text.textContent = buttonId === 'submitBtn' ? 'Submit Record' : 'Fetch My Records';
+            }
+        }
+
+        function checkMetaMask() {
+            if (typeof window.ethereum !== 'undefined') {
+                metamaskInfoDiv.textContent = 'MetaMask is available. Click below to connect your wallet.';
+                metamaskInfoDiv.classList.add('text-green-600');
+                connectBtn.disabled = false;
+            } else {
+                metamaskInfoDiv.innerHTML = `
+                    <p class="text-red-600">MetaMask not detected.</p>
+                    <p class="text-sm text-slate-500">Please install the MetaMask browser extension to use this dApp.</p>
+                `;
+                connectBtn.disabled = true;
+                connectBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        async function initMetaMask() {
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (accounts.length === 0) throw new Error('No accounts found in MetaMask.');
+                
+                userAddress = accounts[0];
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                
+                updateUIForConnection();
+                showToast('Wallet connected successfully!', 'success');
+                
+                window.ethereum.on('accountsChanged', (accounts) => {
+                    if (accounts.length > 0) {
+                        userAddress = accounts[0];
+                        updateUIForConnection();
+                        recordsDiv.innerHTML = '';
+                    } else {
+                        disconnectWallet();
+                    }
+                });
+                
+                window.ethereum.on('chainChanged', () => window.location.reload());
+                
+            } catch (error) {
+                console.error('MetaMask connection error:', error);
+                if (error.code === 4001) showToast('User rejected the connection request.', 'error');
+                else if (error.code === -32002) showToast('Connection request pending. Please check MetaMask.', 'error');
+                else showToast(`Connection Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function updateUIForConnection() {
+            const displayAddress = userAddress;
+            walletInfoDiv.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z"></path></svg>
+                <span class="font-mono text-slate-700">${displayAddress}</span>
+            `;
+            document.getElementById('connect-section').classList.add('hidden');
+            appSection.classList.remove('hidden');
+        }
+
+        function disconnectWallet() {
+            userAddress = null;
+            provider = null;
+            signer = null;
+            document.getElementById('connect-section').classList.remove('hidden');
+            appSection.classList.add('hidden');
+            walletInfoDiv.textContent = '';
+            recordsDiv.innerHTML = '';
+            showToast('Wallet disconnected.', 'info');
+        }
+        
+        async function submitRecord() {
+            if (!userAddress || !signer) {
+                showToast('Please connect your wallet first.', 'error');
+                return;
+            }
+
+            const sleepDuration = document.getElementById('sleepDuration').value;
+            const sleepQuality = document.getElementById('sleepQuality').value;
+            const anomalyScore = document.getElementById('anomalyScore').value;
+            const isAnomaly = document.getElementById('isAnomaly').checked;
+            const userEmail = document.getElementById('userEmail').value;
+
+            if (!sleepDuration || !sleepQuality || !anomalyScore) {
+                showToast('Please fill in duration, quality, and anomaly score.', 'error');
+                return;
+            }
+            
+            toggleButtonSpinner('submitBtn', 'submit-text', true);
+            
+            try {
+                const anomalyScoreValue = parseFloat(anomalyScore);
+                let generatedNotes = '';
+
+                if (anomalyScoreValue < 40) {
+                    generatedNotes = 'Sleep pattern appears stable and healthy. No significant anomalies detected.';
+                } else if (anomalyScoreValue >= 40 && anomalyScoreValue < 70) {
+                    generatedNotes = 'Moderate deviation from the normal sleep pattern was detected. It is advisable to monitor sleeping habits.';
+                } else {
+                    generatedNotes = 'Significant deviation in the sleep pattern was detected. If this pattern persists, consulting a healthcare professional is recommended.';
+                }
+
+                const timestamp = Date.now();
+                const anomalyReport = {
+                    sleepDuration: parseFloat(sleepDuration),
+                    sleepQuality: parseInt(sleepQuality),
+                    score: anomalyScoreValue,
+                    isAnomaly,
+                    notes: generatedNotes,
+                    timestamp
+                };
+                
+                const message = `Store anomaly report for ${userAddress} at ${timestamp}`;
+                const signature = await signer.signMessage(message);
+                
+                const response = await fetch(`${API_BASE_URL}/anomaly`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        anomalyReport,
+                        userAddress,
+                        signature,
+                        userEmail: userEmail || undefined
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    let successMessage = result.message || 'Record submitted successfully!';
+                    if (isAnomaly && userEmail) {
+                        successMessage += ' Anomaly alert email has been requested.';
+                    }
+                    showToast(successMessage, 'success', 6000);
+
+                    // Clear form
+                    document.getElementById('sleepDuration').value = '';
+                    document.getElementById('sleepQuality').value = '';
+                    document.getElementById('anomalyScore').value = '';
+                    document.getElementById('isAnomaly').checked = false;
+                    document.getElementById('userEmail').value = '';
+
+                } else {
+                    throw new Error(result.error || 'Failed to submit data to the backend.');
+                }
+            } catch (error) {
+                console.error('Error submitting record:', error);
+                if (error.code === 4001) showToast('User rejected the signature request.', 'error');
+                else showToast(`Submission Error: ${error.message}`, 'error');
+            } finally {
+                toggleButtonSpinner('submitBtn', 'submit-text', false);
+            }
+        }
+
+        async function fetchRecords() {
+            if (!userAddress) {
+                showToast('Please connect your wallet first.', 'error');
+                return;
+            }
+            
+            toggleButtonSpinner('fetchBtn', 'fetch-text', true);
+            recordsDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/anomaly/${userAddress}`);
+                const records = await response.json();
+                
+                if (response.ok) {
+                    displayRecords(records);
+                    showToast(`Found ${records.length} record(s).`, 'success');
+                } else {
+                    throw new Error(records.error || 'Failed to fetch records from the backend.');
+                }
+            } catch (error) {
+                console.error('Error fetching records:', error);
+                showToast(`Fetch Error: ${error.message}`, 'error');
+            } finally {
+                toggleButtonSpinner('fetchBtn', 'fetch-text', false);
+            }
+        }
+
+        function displayRecords(records) {
+            if (!records || records.length === 0) {
+                recordsDiv.innerHTML = '<div class="form-card p-6 rounded-lg text-center text-slate-500">No records found for this address.</div>';
+                return;
+            }
+
+            records.sort((a, b) => b.timestamp - a.timestamp);
+            
+            const recordsHTML = records.map(record => {
+                const report = record.anomalyReport || {};
+                const quality = report.sleepQuality ?? 'N/A';
+                const duration = report.sleepDuration ?? 'NA';
+                const score = report.score ?? 'N/A';
+                const isAnomaly = report.isAnomaly;
+                const notes = report.notes || 'No notes provided.';
+                const date = new Date(record.timestamp * 1000).toLocaleString(); // Convert seconds to ms
+
+                return `
+                <div class="record-card p-6 rounded-2xl">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                           <h3 class="text-lg font-semibold text-slate-900">Record from ${date}</h3>
+                           <span class="text-xs text-slate-500">On-Chain Record</span>
+                        </div>
+                        ${isAnomaly ? '<span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-1 rounded-full">Anomaly</span>' : '<span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-1 rounded-full">Normal</span>'}
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <p><strong>Anomaly Score:</strong> ${score}</p>
+                        <p><strong>Sleep Duration:</strong> ${duration} hours</p>
+                        <p><strong>Sleep Quality:</strong> ${quality} / 10</p>
+                        <p class="sm:col-span-3"><strong>Notes:</strong> <span class="text-slate-600">${notes}</span></p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-slate-200 font-mono text-xs text-slate-500 space-y-2">
+                        <p><strong>IPFS Hash:</strong> <span class="break-all text-slate-600">${record.ipfsHash}</span></p>
+                        <p><strong>ZK Proof Hash:</strong> <span class="break-all text-slate-600">${record.zkProofHash}</span></p>
+                    </div>
+                </div>
+                `;
+            }).join('');
+            recordsDiv.innerHTML = recordsHTML;
+        }
+        connectBtn.addEventListener('click', initMetaMask);
+        submitBtn.addEventListener('click', submitRecord);
+        fetchBtn.addEventListener('click', fetchRecords);
+        window.addEventListener('load', () => {
+            checkMetaMask();
+            if (typeof window.ethereum !== 'undefined' && window.ethereum.isMetaMask) {
+                window.ethereum.request({ method: 'eth_accounts' })
+                    .then(accounts => {
+                        if (accounts.length > 0) {
+                            userAddress = accounts[0];
+                            provider = new ethers.providers.Web3Provider(window.ethereum);
+                            signer = provider.getSigner();
+                            updateUIForConnection();
+                        }
+                    }).catch(err => console.error("Error checking for persisted accounts:", err));
+            }
+        });
+    </script>
+</body>
+</html>
+
